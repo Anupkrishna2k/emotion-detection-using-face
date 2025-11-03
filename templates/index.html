@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Emotion Recognition</title>
+  <style>
+    body { text-align:center; font-family:Arial; }
+    video, canvas { border:2px solid #444; margin-top:10px; }
+    #result { font-size:1.4rem; margin-top:15px; }
+  </style>
+</head>
+<body>
+  <h1>Emotion Recognition Through Face</h1>
+  <video id="video" width="400" height="300" autoplay></video><br>
+  <canvas id="canvas" width="400" height="300" style="display:none"></canvas>
+  <div id="result">Detecting...</div>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
