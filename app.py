@@ -3,24 +3,21 @@ import cv2
 import numpy as np
 import base64
 import onnxruntime as ort
-from face_timestamp import detect_faces_in_frame  # Developer’s custom face detection
 
 app = Flask(__name__)
 
-# Load the models
+# Load models
 print("🔄 Loading models...")
 face_net = cv2.dnn.readNetFromCaffe("RFB-320.prototxt", "RFB-320.caffemodel")
 emotion_model = ort.InferenceSession("emotion-ferplus-8.onnx")
 emotions = ["Neutral", "Happiness", "Surprise", "Sadness", "Anger", "Disgust", "Fear", "Contempt"]
 print("✅ Models loaded successfully!")
 
-# Optional: print model input shape for debugging
 print("Model input shape:", emotion_model.get_inputs()[0].shape)
 
-
 # ---- FACE DETECTION ----
-def detect_face(image):
-    """Detect a single face using OpenCV DNN"""
+def detect_faces_in_frame(image):
+    """Detect faces using OpenCV DNN model"""
     h, w = image.shape[:2]
     blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 1.0,
                                  (300, 300), (104.0, 177.0, 123.0))
@@ -42,7 +39,7 @@ def preprocess_face(face):
     try:
         gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         resized = cv2.resize(gray, (64, 64))
-        blob = resized.reshape(1, 1, 64, 64).astype("float32")  # (batch, channels, height, width)
+        blob = resized.reshape(1, 1, 64, 64).astype("float32")  # match ONNX input
         return blob
     except Exception as e:
         print("❌ Preprocessing error:", e)
@@ -80,7 +77,7 @@ def predict():
         np_arr = np.frombuffer(img_data, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-        faces = detect_face(frame)
+        faces = detect_faces_in_frame(frame)
         results = []
 
         for face in faces:
