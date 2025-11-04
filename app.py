@@ -3,102 +3,100 @@ import cv2
 import numpy as np
 import base64
 import onnxruntime as ort
+from face_timestamp import detect_faces_in_frame  # Developer’s custom face detection
 
 app = Flask(__name__)
 
-# Load models once at startup
-print("Loading face detection and emotion recognition models...")
-
+# Load the models
+print("🔄 Loading models...")
 face_net = cv2.dnn.readNetFromCaffe("RFB-320.prototxt", "RFB-320.caffemodel")
 emotion_model = ort.InferenceSession("emotion-ferplus-8.onnx")
-import sys
+emotions = ["Neutral", "Happiness", "Surprise", "Sadness", "Anger", "Disgust", "Fear", "Contempt"]
+print("✅ Models loaded successfully!")
+
+# Optional: print model input shape for debugging
 print("Model input shape:", emotion_model.get_inputs()[0].shape)
-sys.stdout.flush()
-emotions = [
-    "Neutral", "Happiness", "Surprise", "Sadness",
-    "Anger", "Disgust", "Fear", "Contempt"
-]
 
-print("✅ Models loaded successfully.")
 
-# ----------------------------
-# Face detection using OpenCV DNN
-# ----------------------------
-def detect_faces_in_frame(frame, net, conf_threshold=0.5):
-    (h, w) = frame.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (320, 240)), 1.0, (320, 240),
-                                 (104.0, 177.0, 123.0))
-    net.setInput(blob)
-    detections = net.forward()
+# ---- FACE DETECTION ----
+def detect_face(image):
+    """Detect a single face using OpenCV DNN"""
+    h, w = image.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 1.0,
+                                 (300, 300), (104.0, 177.0, 123.0))
+    face_net.setInput(blob)
+    detections = face_net.forward()
 
     faces = []
     for i in range(detections.shape[2]):
         confidence = detections[0, 0, i, 2]
-        if confidence > conf_threshold:
+        if confidence > 0.6:
             box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
             (x1, y1, x2, y2) = box.astype("int")
-            x, y, w_box, h_box = x1, y1, x2 - x1, y2 - y1
-            faces.append((x, y, w_box, h_box))
+            faces.append(image[y1:y2, x1:x2])
     return faces
 
-# ----------------------------
-# Preprocess face for ONNX model
-# ----------------------------
+
+# ---- PREPROCESS ----
 def preprocess_face(face):
-    face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-    face = cv2.resize(face, (64, 64))
-    face = face.astype("float32") / 255.0
-    # Model expects shape (1, 64, 64)
-    face = np.expand_dims(face, axis=0)  # Add batch dimension only
-    return face
+    try:
+        gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (64, 64))
+        blob = resized.reshape(1, 1, 64, 64).astype("float32")  # (batch, channels, height, width)
+        return blob
+    except Exception as e:
+        print("❌ Preprocessing error:", e)
+        return None
 
 
-# ----------------------------
-# Flask Routes
-# ----------------------------
+# ---- EMOTION PREDICTION ----
+def predict_emotion(face):
+    blob = preprocess_face(face)
+    if blob is None:
+        return "Unknown"
+
+    try:
+        input_name = emotion_model.get_inputs()[0].name
+        output_name = emotion_model.get_outputs()[0].name
+        preds = emotion_model.run([output_name], {input_name: blob})[0]
+        emotion = emotions[int(np.argmax(preds))]
+        return emotion
+    except Exception as e:
+        print("❌ Prediction error:", e)
+        return "Unknown"
+
+
+# ---- ROUTES ----
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Get image from request
         data = request.get_json()
-        img_data = data["image"]
-        img_data = img_data.split(",")[1]
-        nparr = np.frombuffer(base64.b64decode(img_data), np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        img_data = base64.b64decode(data["image"].split(",")[1])
+        np_arr = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-        # Detect faces
-        faces = detect_faces_in_frame(frame, face_net)
+        faces = detect_face(frame)
         results = []
 
-        for (x, y, w, h) in faces:
-            face_roi = frame[y:y + h, x:x + w]
-            if face_roi.size == 0:
-                continue
+        for face in faces:
+            emotion = predict_emotion(face)
+            results.append(emotion)
 
-            processed_face = preprocess_face(face_roi)
-            ort_inputs = {emotion_model.get_inputs()[0].name: processed_face}
-            ort_outs = emotion_model.run(None, ort_inputs)
-            emotion_idx = np.argmax(ort_outs[0])
-            emotion = emotions[emotion_idx]
+        if not results:
+            return jsonify({"error": "No face detected"}), 200
 
-            results.append({
-                "x": int(x), "y": int(y), "w": int(w), "h": int(h),
-                "emotion": emotion
-            })
-
-        return jsonify({"results": results})
+        return jsonify({"emotions": results})
 
     except Exception as e:
         print("❌ Error:", e)
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
-@app.route("/health")
-def health():
-    return "OK", 200
 
 if __name__ == "__main__":
+    print("🚀 Starting Flask app...")
     app.run(host="0.0.0.0", port=5000)
