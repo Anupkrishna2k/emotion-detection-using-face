@@ -11,7 +11,9 @@ print("Loading face detection and emotion recognition models...")
 
 face_net = cv2.dnn.readNetFromCaffe("RFB-320.prototxt", "RFB-320.caffemodel")
 emotion_model = ort.InferenceSession("emotion-ferplus-8.onnx")
+import sys
 print("Model input shape:", emotion_model.get_inputs()[0].shape)
+sys.stdout.flush()
 emotions = [
     "Neutral", "Happiness", "Surprise", "Sadness",
     "Anger", "Disgust", "Fear", "Contempt"
