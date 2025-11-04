@@ -1,19 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Emotion Recognition</title>
+  <meta charset="UTF-8" />
+  <title>Emotion Detection</title>
   <style>
-    body { text-align:center; font-family:Arial; }
-    video, canvas { border:2px solid #444; margin-top:10px; }
-    #result { font-size:1.4rem; margin-top:15px; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #101820;
+      color: white;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 20px;
+      color: #00d4ff;
+    }
+    #video-container {
+      position: relative;
+      display: inline-block;
+    }
+    video, canvas {
+      border-radius: 10px;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #status {
+      margin-top: 10px;
+      color: #00ff99;
+      font-size: 1.1em;
+    }
   </style>
 </head>
 <body>
-  <h1>Emotion Recognition Through Face</h1>
-  <video id="video" width="400" height="300" autoplay></video><br>
-  <canvas id="canvas" width="400" height="300" style="display:none"></canvas>
-  <div id="result">Detecting...</div>
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <h1>🎭 Real-Time Emotion Detection</h1>
+  <div id="video-container">
+    <video id="video" width="480" height="360" autoplay muted></video>
+    <canvas id="overlay" width="480" height="360"></canvas>
+  </div>
+  <div id="status">Initializing camera...</div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+    const statusEl = document.getElementById("status");
+
+    // Start webcam
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        statusEl.textContent = "Camera active ✔️";
+        detectLoop();
+      } catch (err) {
+        statusEl.textContent = "❌ Cannot access webcam.";
+        console.error(err);
+      }
+    }
+
+    // Capture and send frame to backend
+    async function detectLoop() {
+      const interval = 800; // ms
+      setInterval(async () => {
+        // Draw video frame to canvas
+        const tmpCanvas = document.createElement("canvas");
+        tmpCanvas.width = video.videoWidth;
+        tmpCanvas.height = video.videoHeight;
+        const tmpCtx = tmpCanvas.getContext("2d");
+        tmpCtx.drawImage(video, 0, 0);
+
+        // Convert to base64
+        const dataURL = tmpCanvas.toDataURL("image/jpeg");
+
+        // Send to backend
+        try {
+          const res = await fetch("/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: dataURL })
+          });
+          const data = await res.json();
+
+          // Draw results
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (data.results) {
+            for (const face of data.results) {
+              ctx.strokeStyle = "#00FF00";
+              ctx.lineWidth = 2;
+              ctx.strokeRect(face.x, face.y, face.w, face.h);
+              ctx.fillStyle = "#00FF00";
+              ctx.font = "16px Arial";
+              ctx.fillText(face.emotion, face.x + 5, face.y - 5);
+            }
+          }
+        } catch (e) {
+          console.error("Prediction error:", e);
+        }
+      }, interval);
+    }
+
+    startCamera();
+  </script>
 </body>
 </html>
