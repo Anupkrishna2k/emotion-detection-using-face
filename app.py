@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import base64
 import onnxruntime as ort
-from face_timestamp import detect_faces_in_frame  # use the developer's face detection
+#from face_timestamp import detect_faces_in_frame  # use the developer's face detection
 
 app = Flask(__name__)
 
