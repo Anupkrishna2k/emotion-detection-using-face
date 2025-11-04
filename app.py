@@ -48,7 +48,7 @@ def preprocess_face(face):
     face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
     face = cv2.resize(face, (64, 64))
     face = face.astype("float32") / 255.0
-    face = np.expand_dims(face, axis=0)
+    # Only expand batch dimension, not channels
     face = np.expand_dims(face, axis=0)
     return face
 
