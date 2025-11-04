@@ -11,6 +11,7 @@ print("Loading face detection and emotion recognition models...")
 
 face_net = cv2.dnn.readNetFromCaffe("RFB-320.prototxt", "RFB-320.caffemodel")
 emotion_model = ort.InferenceSession("emotion-ferplus-8.onnx")
+print("Model input shape:", emotion_model.get_inputs()[0].shape)
 emotions = [
     "Neutral", "Happiness", "Surprise", "Sadness",
     "Anger", "Disgust", "Fear", "Contempt"
@@ -45,10 +46,10 @@ def preprocess_face(face):
     face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
     face = cv2.resize(face, (64, 64))
     face = face.astype("float32") / 255.0
-    # Model expects (1, 1, 64, 64)
-    face = np.expand_dims(face, axis=0)  # batch
-    face = np.expand_dims(face, axis=0)  # channel
+    # Model expects shape (1, 64, 64)
+    face = np.expand_dims(face, axis=0)  # Add batch dimension only
     return face
+
 
 # ----------------------------
 # Flask Routes
