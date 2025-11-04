@@ -45,8 +45,9 @@ def preprocess_face(face):
     face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
     face = cv2.resize(face, (64, 64))
     face = face.astype("float32") / 255.0
-    # FIX: emotion-ferplus-8.onnx expects shape (1, 64, 64)
-    face = np.expand_dims(face, axis=0)
+    # Model expects (1, 1, 64, 64)
+    face = np.expand_dims(face, axis=0)  # batch
+    face = np.expand_dims(face, axis=0)  # channel
     return face
 
 # ----------------------------
